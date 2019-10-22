@@ -2,22 +2,19 @@
 module LiteDB.FSharp
 open LiteDB
 
-/// Type Used Internally By Collection Functions.
-/// There Shouldn't Be A Reason To Consume This Publicly.
-/// This Type Must Be Public For The Serializer To Behave Correctly.
-type IDed<'T> = {
-    Id: int
-    Value: 'T
-}
+// NOTE: These extensions make use of anonymous records
+//       to prevent introducing a named type that is of
+//       little or no value to the consumers of these extensions
 
-type LiteSingleItemCollection<'T>(col: LiteCollection<IDed<'T>>) =
+/// A Collection Of At Most One Item
+type LiteSingleItemCollection<'T>(col: LiteCollection<{| Id: int; Value: 'T |}>) =
     member _.get () =
         col.FindAll()
            |> Seq.map (fun x -> x.Value)
            |> Seq.tryHead
 
     member _.set (value: 'T) =
-        col.Upsert({ Id = 1; Value = value })
+        col.Upsert({| Id = 1; Value = value |})
            |> ignore
 
     member _.delete () =
@@ -25,6 +22,7 @@ type LiteSingleItemCollection<'T>(col: LiteCollection<IDed<'T>>) =
            |> ignore
 
 type LiteDatabase with
-    member this.SingleCollection<'T>(name: string) =
-        this.GetCollection<IDed<'T>>(name)
+    /// Returns A Collection Of At Most One Item
+    member this.SingleItemCollection<'T>(name: string) =
+        this.GetCollection<{| Id: int; Value: 'T |}>(name)
         |> LiteSingleItemCollection
