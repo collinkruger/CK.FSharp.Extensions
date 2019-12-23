@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="CK.TinyLog.fs" />
     <Compile Include="LiteDB.FSharp.fs" />
   </ItemGroup>
 
