@@ -42,52 +42,52 @@ let private format_exn (ex: Exception) =
 /// Generate A New Logger
 let gen (root: DirectoryInfo): Logger =
 
-    let mbp = MailboxProcessor.Start(fun inbox ->
-        let mutable op = InitStreamWriter
-        let mutable do_loop = true
-        async {
-            while do_loop do
-                match op with
-                | InitStreamWriter ->
-                        let sw = gen_stream_writer DateTime.Now root
-                        op <- HandleMessage(sw, 0)
-                    
-                | CloseAndInitStreamWriter sw ->
-                        sw.Dispose()
-                        op <- InitStreamWriter
-                        
-                | HandleMessage (sw, count) when count = 1000 ->
-                        op <- CloseAndInitStreamWriter sw
-                        
-                | HandleMessage (sw, count) ->
-                        let! msg = inbox.Receive()
-                            
-                        let line = match msg with
+     let mbp = MailboxProcessor.Start(fun inbox ->
+         let rec loop op =
+             async {
+                 match op with
+                 | InitStreamWriter ->
+                         let sw = gen_stream_writer DateTime.Now root
+                         return! loop (HandleMessage(sw, 0))
+                 
+                 | CloseAndInitStreamWriter sw ->
+                         sw.Dispose()
+                         return! loop InitStreamWriter
+                     
+                 | HandleMessage (sw, count) when count = 1000 ->
+                         return! loop (CloseAndInitStreamWriter sw)
+                     
+                 | HandleMessage (sw, count) ->
+                         let! msg = inbox.Receive()
+                         
+                         let line = match msg with
                                     | LogString str    -> Some str
                                     | LogException exn -> Some (format_exn exn)
                                     | Dispose          -> None
-                                       
-                        let lineWithDT = line
-                                            |> Option.map (fun str -> format_date DateTime.Now + str)
-                            
-                        match lineWithDT with
-                        | Some line ->
-                            //sw.WriteLine(line)
-                            op <- HandleMessage(sw, count + 1)
-                                
-                        | None ->
-                            op <- Terminate sw
-                                
-                | Terminate sw ->
-                        sw.Dispose()
-                        do_loop <- false
-        })
-                    
-    let log_string str    = mbp.Post (LogString str)
-    let log_exception exn = mbp.Post (LogException exn)
-    let dispose ()        = mbp.Post Dispose
-        
-    new Logger(log_string, log_exception, dispose)
+                                    
+                         let lineWithDT = line
+                                          |> Option.map (fun str -> format_date DateTime.Now + str)
+                         
+                         match lineWithDT with
+                         | Some line ->
+                             sw.WriteLine(line)
+                             return! loop (HandleMessage(sw, count + 1))
+                             
+                         | None ->
+                             return! loop (Terminate sw)
+                             
+                 | Terminate sw ->
+                         sw.Dispose()
+                         return ()
+             }
+                     
+         loop InitStreamWriter)
+                 
+     let log_string str    = mbp.Post (LogString str)
+     let log_exception exn = mbp.Post (LogException exn)
+     let dispose ()        = mbp.Post Dispose
+     
+     new Logger(log_string, log_exception, dispose)
 
 
 module RuntimeTests =
