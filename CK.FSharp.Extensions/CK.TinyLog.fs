@@ -30,7 +30,8 @@ type private MBPMsg =
 let private gen_stream_writer (dt: DateTime) (root: DirectoryInfo) =
     let fs_friendly_datetime_str = dt.ToString("yyyy-MM-dd HH-mm-ss-fff")
     let fp = sprintf "%s/%s.log" root.FullName fs_friendly_datetime_str
-    new StreamWriter(File.OpenWrite(fp))
+    let fs = new FileStream(fp, FileMode.Create, FileAccess.Write, FileShare.Read)
+    new StreamWriter(fs, AutoFlush = true)
         
 let private format_date (dt: DateTime) =
     dt.ToString("yyyy/MM/dd HH:mm:ss: ")
@@ -64,7 +65,7 @@ let gen (root: DirectoryInfo): Logger =
                                     | LogString str    -> Some str
                                     | LogException exn -> Some (format_exn exn)
                                     | Dispose          -> None
-                                    
+
                          let lineWithDT = line
                                           |> Option.map (fun str -> format_date DateTime.Now + str)
                          
